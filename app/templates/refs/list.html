@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ ref.title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ ref.title }}</h1>
+  {% if can_edit %}<div class="actions"><a class="btn btn-primary" href="/refs/{{ ref.slug }}/new">+ Добавить</a></div>{% endif %}
+</div>
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="Поиск…" aria-label="Поиск">
+  <button class="btn" type="submit">Найти</button>
+  {% if q %}<a class="btn btn-ghost" href="/refs/{{ ref.slug }}">Сбросить</a>{% endif %}
+</form>
+<div class="card table-card">
+  {% if rows %}
+  <table class="table table-responsive">
+    <thead><tr>{% for label, _ in columns %}<th>{{ label }}</th>{% endfor %}{% if ref.slug == 'contracts' %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr {% if can_edit %}class="row-link" data-href="/refs/{{ ref.slug }}/{{ row.id }}/edit"{% endif %}>
+        {% for label, getter in columns %}
+          <td data-label="{{ label }}">{% if loop.first and can_edit %}<a href="/refs/{{ ref.slug }}/{{ row.id }}/edit">{{ getter(row) or '—' }}</a>{% else %}{{ getter(row) or '—' }}{% endif %}</td>
+        {% endfor %}
+        {% if ref.slug == 'contracts' %}<td><a href="/items?contract_id={{ row.id }}" class="small">Позиции →</a></td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Записей не найдено.{% if can_edit %} <a href="/refs/{{ ref.slug }}/new">Добавить первую</a>{% endif %}</div>
+  {% endif %}
+</div>
+{% endblock %}

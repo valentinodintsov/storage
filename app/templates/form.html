@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "macros.html" import field %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{{ back }}">← Назад</a>
+    <h1>{{ title }}</h1>
+  </div>
+</div>
+{% if errors.get('__all__') %}<div class="alert alert-error">{{ errors['__all__'] }}</div>{% endif %}
+<form method="post" action="{{ action }}" class="card form" data-kind-form>
+  <div class="form-grid">
+    {% for f in fields %}{{ field(f, values, errors, options) }}{% endfor %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ submit }}</button>
+    {% if action == '/items/new' %}
+      <button class="btn" type="submit" name="then" value="more">Сохранить и добавить ещё</button>
+    {% endif %}
+    <a class="btn btn-ghost" href="{{ back }}">Отмена</a>
+  </div>
+</form>
+{% if extra and extra.delete_url %}
+<form method="post" action="{{ extra.delete_url }}" class="danger-zone" data-confirm="Удалить запись безвозвратно?">
+  <button class="btn btn-danger btn-sm" type="submit">Удалить запись</button>
+</form>
+{% endif %}
+{% endblock %}

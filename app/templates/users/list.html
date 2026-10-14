@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Пользователи{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Пользователи</h1>
+  <div class="actions"><a class="btn btn-primary" href="/users/new">+ Добавить</a></div>
+</div>
+<div class="card table-card">
+  <table class="table table-responsive">
+    <thead><tr><th>Логин</th><th>Роль</th><th>Сотрудник</th><th>Статус</th></tr></thead>
+    <tbody>
+    {% for u in rows %}
+      <tr class="row-link" data-href="/users/{{ u.id }}/edit">
+        <td data-label="Логин"><a href="/users/{{ u.id }}/edit">{{ u.username }}</a></td>
+        <td data-label="Роль">{{ ROLE_LABELS[u.role] }}</td>
+        <td data-label="Сотрудник">{{ u.employee.full_name if u.employee else '—' }}</td>
+        <td data-label="Статус">{% if u.is_active %}<span class="badge badge-in_stock">активна</span>{% else %}<span class="badge badge-written_off">заблокирована</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<section class="card">
+  <h2>Права ролей</h2>
+  <table class="table table-responsive matrix">
+    <thead><tr><th>Возможность</th><th>Администратор</th><th>Менеджер (МОЛ)</th><th>Руководитель</th><th>Пользователь</th></tr></thead>
+    <tbody>
+      <tr><td>Управление пользователями</td><td>✔</td><td></td><td></td><td></td></tr>
+      <tr><td>Справочники, учёт позиций</td><td>✔</td><td>✔</td><td>просмотр</td><td></td></tr>
+      <tr><td>Составление накладных</td><td>✔</td><td>✔</td><td>просмотр</td><td>свои</td></tr>
+      <tr><td>Подпись МОЛ (ЭП)</td><td></td><td>✔</td><td></td><td></td></tr>
+      <tr><td>Утверждение накладной (ЭП)</td><td></td><td></td><td>✔</td><td></td></tr>
+      <tr><td>Подтверждение получения</td><td colspan="4">сотрудник-получатель по накладной</td></tr>
+      <tr><td>Журнал действий</td><td>✔</td><td></td><td>✔</td><td></td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}

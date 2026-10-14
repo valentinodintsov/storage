@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Вход{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <form method="post" action="/login" class="card login-card">
+    <div class="login-brand"><span class="brand-mark">▦</span> {{ app_name }}</div>
+    <p class="muted">Учёт техники, лицензий, оргтехники и мебели</p>
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="field field-wide">
+      <label for="username">Логин</label>
+      <input id="username" name="username" value="{{ username|default('') }}" autocomplete="username" required autofocus>
+    </div>
+    <div class="field field-wide">
+      <label for="password">Пароль</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">Войти</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+# --- Секреты ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+
+# --- Виртуальное окружение ---
+.venv/
+venv/
+env/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Локальные базы данных ---
+*.db
+*.sqlite3
+*.db-journal
+
+# --- Сторонние скрипты КриптоПро (распространяются по лицензии вендора) ---
+app/static/vendor/*
+!app/static/vendor/README.txt
+
+# --- IDE и ОС ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Логи ---
+*.log

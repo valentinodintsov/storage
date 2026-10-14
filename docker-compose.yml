@@ -1,0 +1,27 @@
+# Секреты берутся из .env (см. .env.example). В .env для docker укажите:
+#   STORAGE_DATABASE_URL=postgresql+psycopg://storage:<POSTGRES_PASSWORD>@db:5432/storage
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: storage
+      POSTGRES_USER: storage
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storage"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

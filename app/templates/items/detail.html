@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "macros.html" import item_status, waybill_status %}
+{% block title %}{{ item.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="/items">← Имущество</a>
+    <h1>{{ item.name }}</h1>
+    <div class="subtitle">{{ ITEM_KIND_LABELS[item.kind] }}{% if item.category %} · {{ item.category.name }}{% endif %} · {{ item_status(item.status) }}</div>
+  </div>
+  {% if can_edit and item.status != ItemStatus.WRITTEN_OFF %}
+  <div class="actions">
+    {% if item.status == ItemStatus.IN_STOCK %}
+      <a class="btn btn-primary" href="/waybills/new?type=issue&organization_id={{ item.organization_id }}&item_ids={{ item.id }}">Выдать</a>
+    {% elif item.status == ItemStatus.ISSUED %}
+      <a class="btn" href="/waybills/new?type=return&organization_id={{ item.organization_id }}&sender_id={{ item.holder_id }}&item_ids={{ item.id }}">Вернуть на склад</a>
+      <a class="btn" href="/waybills/new?type=transfer&organization_id={{ item.organization_id }}&sender_id={{ item.holder_id }}&item_ids={{ item.id }}">Передать</a>
+    {% endif %}
+    <a class="btn btn-ghost" href="/items/{{ item.id }}/edit">Изменить</a>
+  </div>
+  {% endif %}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Сведения</h2>
+    <dl class="props">
+      <dt>Инвентарный номер</dt><dd>{{ item.inventory_number or '—' }}</dd>
+      {% if item.kind != 'license' %}<dt>Серийный номер</dt><dd>{{ item.serial_number or '—' }}</dd>{% endif %}
+      <dt>Производитель</dt><dd>{{ item.manufacturer or '—' }}</dd>
+      <dt>Модель</dt><dd>{{ item.model or '—' }}</dd>
+      {% if item.kind == 'license' %}
+        <dt>Лицензионный ключ</dt><dd class="mono">{{ item.license_key or '—' if user.role != Role.USER or item.holder_id == user.employee_id else '••••' }}</dd>
+        <dt>Рабочих мест</dt><dd>{{ item.seats or '—' }}</dd>
+        <dt>Срок действия</dt><dd>{{ item.valid_until|ru_date if item.valid_until else 'бессрочно' }}</dd>
+      {% endif %}
+      <dt>Стоимость</dt><dd>{{ item.price|money }}</dd>
+      <dt>Принято к учёту</dt><dd>{{ item.acquired_at|ru_date }}</dd>
+      {% if item.warranty_until %}<dt>Гарантия до</dt><dd>{{ item.warranty_until|ru_date }}</dd>{% endif %}
+      <dt>Местонахождение</dt><dd>{{ item.location or '—' }}</dd>
+      {% if item.notes %}<dt>Примечание</dt><dd>{{ item.notes }}</dd>{% endif %}
+    </dl>
+  </section>
+  <section class="card">
+    <h2>Учёт и закрепление</h2>
+    <dl class="props">
+      <dt>Закреплено за</dt><dd>{% if item.holder %}<strong>{{ item.holder.full_name }}</strong>{% if item.holder.position %}<div class="muted small">{{ item.holder.position }}</div>{% endif %}{% else %}— (на складе){% endif %}</dd>
+      <dt>Балансодержатель</dt><dd>{{ item.organization }}</dd>
+      <dt>Госконтракт</dt><dd>{% if item.contract %}{{ item.contract }}<div class="muted small">{{ item.contract.subject }}</div>{% else %}—{% endif %}</dd>
+      <dt>Поставщик</dt><dd>{{ item.counterparty or (item.contract.counterparty if item.contract) or '—' }}</dd>
+    </dl>
+    {% if can_edit and transitions %}
+    <details class="status-change">
+      <summary>Сменить статус (ремонт, списание)</summary>
+      <form method="post" action="/items/{{ item.id }}/status" class="inline-form" data-confirm="Сменить статус позиции?">
+        <select name="status" required>
+          {% for s in transitions %}<option value="{{ s.value }}">{{ ITEM_STATUS_LABELS[s] }}</option>{% endfor %}
+        </select>
+        <input name="reason" placeholder="Основание (акт, заявка…)" required>
+        <button class="btn" type="submit">Применить</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+</div>
+
+{% if history.waybills or history.events %}
+<div class="grid-2">
+  <section class="card">
+    <h2>Накладные</h2>
+    {% if history.waybills %}
+    <table class="table">
+      <tbody>
+      {% for w in history.waybills %}
+        <tr class="row-link" data-href="/waybills/{{ w.id }}">
+          <td><a href="/waybills/{{ w.id }}">№ {{ w.number }}</a><div class="muted small">{{ w.date|ru_date }} · {{ WAYBILL_TYPE_LABELS[w.type] }}</div></td>
+          <td>{{ w.sender.short_name }} → {{ w.receiver.short_name }}</td>
+          <td>{{ waybill_status(w.status) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">Не выдавалась.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h2>История изменений</h2>
+    <ul class="timeline">
+      {% for e in history.events %}
+        <li><span class="muted small">{{ e.at|ru_date }} · {{ e.user.display_name if e.user else 'система' }}</span><br>{{ e.details or e.action }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+{% endif %}
+
+{% if can_edit and not history.waybills %}
+<form method="post" action="/items/{{ item.id }}/delete" class="danger-zone" data-confirm="Удалить позицию? Используйте, только если она внесена ошибочно.">
+  <button class="btn btn-danger btn-sm" type="submit">Удалить ошибочную запись</button>
+</form>
+{% endif %}
+{% endblock %}

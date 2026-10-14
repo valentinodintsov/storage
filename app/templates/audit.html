@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Журнал действий{% endblock %}
+{% block content %}
+{% set entities = {'items': 'Позиции', 'waybills': 'Накладные', 'users': 'Пользователи', 'contracts': 'Госконтракты', 'counterparties': 'Контрагенты', 'organizations': 'Организации', 'employees': 'Сотрудники', 'categories': 'Категории'} %}
+{% set actions = {'create': 'создание', 'update': 'изменение', 'delete': 'удаление', 'sign': 'подписание', 'cancel': 'отмена', 'status': 'смена статуса', 'move': 'перемещение'} %}
+<div class="page-head"><h1>Журнал действий</h1></div>
+<form class="filters" method="get">
+  <select name="entity" aria-label="Объект">
+    <option value="">Все объекты</option>
+    {% for k, v in entities.items() %}<option value="{{ k }}" {{ 'selected' if entity == k }}>{{ v }}</option>{% endfor %}
+  </select>
+  <button class="btn" type="submit">Применить</button>
+</form>
+<div class="card table-card">
+  <table class="table table-responsive">
+    <thead><tr><th>Время</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>Подробности</th></tr></thead>
+    <tbody>
+    {% for e in rows %}
+      <tr>
+        <td data-label="Время" class="nowrap">{{ e.at|ru_date }}</td>
+        <td data-label="Пользователь">{{ e.user.username if e.user else 'система' }}</td>
+        <td data-label="Действие">{{ actions.get(e.action, e.action) }}</td>
+        <td data-label="Объект">
+          {% if e.entity == 'items' %}<a href="/items/{{ e.entity_id }}">{{ entities[e.entity] }} #{{ e.entity_id }}</a>
+          {% elif e.entity == 'waybills' %}<a href="/waybills/{{ e.entity_id }}">{{ entities[e.entity] }} #{{ e.entity_id }}</a>
+          {% else %}{{ entities.get(e.entity, e.entity) }} #{{ e.entity_id }}{% endif %}
+        </td>
+        <td data-label="Подробности" class="small">{{ e.details or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

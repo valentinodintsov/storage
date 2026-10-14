@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "macros.html" import waybill_status %}
+{% block title %}Накладная № {{ w.number }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="/waybills">← Накладные</a>
+    <h1>Накладная № {{ w.number }} от {{ w.date|ru_date }}</h1>
+    <div class="subtitle">{{ WAYBILL_TYPE_LABELS[w.type] }} · {{ waybill_status(w.status) }}</div>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/waybills/{{ w.id }}/print" target="_blank">Печатная форма</a>
+    {% if can_edit and w.status == WaybillStatus.DRAFT %}<a class="btn btn-ghost" href="/waybills/{{ w.id }}/edit">Изменить</a>{% endif %}
+  </div>
+</div>
+
+<ol class="stepper">
+  {% set order = [WaybillStatus.DRAFT, WaybillStatus.MANAGER_SIGNED, WaybillStatus.APPROVED, WaybillStatus.RECEIVED] %}
+  {% set current = order.index(w.status) if w.status in order else -1 %}
+  {% for st, label in [(WaybillStatus.DRAFT, 'Составлена'), (WaybillStatus.MANAGER_SIGNED, 'Подпись МОЛ'), (WaybillStatus.APPROVED, 'Подпись руководителя'), (WaybillStatus.RECEIVED, 'Получено')] %}
+    <li class="{{ 'done' if loop.index0 <= current }} {{ 'cancelled' if w.status == WaybillStatus.CANCELLED }}">{{ label }}</li>
+  {% endfor %}
+</ol>
+
+{% if signer_role %}
+<section class="card card-accent sign-box">
+  <h2>{% if signer_role == SignerRole.RECEIVER %}Подтвердите получение имущества{% else %}Требуется ваша подпись ({{ SIGNER_ROLE_LABELS[signer_role] }}){% endif %}</h2>
+  <p class="muted">
+    {% if signer_role == SignerRole.HEAD %}После утверждения имущество будет закреплено за получателем.{% endif %}
+    Проверьте состав документа. Подписание фиксирует его содержимое: последующие изменения сделают подпись недействительной.
+  </p>
+  <form method="post" action="/waybills/{{ w.id }}/sign" class="inline-form" id="sign-form" data-provider="{{ provider }}" data-waybill="{{ w.id }}">
+    {% if provider == 'cades' %}
+      <input type="hidden" name="signature">
+      <input type="hidden" name="certificate">
+      <select id="cert-select" aria-label="Сертификат" required><option value="">Загрузка сертификатов…</option></select>
+      <button class="btn btn-primary" type="submit">Подписать ЭП</button>
+      <div class="hint" id="cades-status">Требуется КриптоПро CSP и КриптоПро ЭЦП Browser plug-in.</div>
+    {% else %}
+      <input type="password" name="password" placeholder="Пароль для подтверждения" autocomplete="current-password" required>
+      <button class="btn btn-primary" type="submit">{{ 'Подтвердить получение' if signer_role == SignerRole.RECEIVER else 'Подписать' }}</button>
+    {% endif %}
+  </form>
+</section>
+{% endif %}
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Реквизиты</h2>
+    <dl class="props">
+      <dt>Организация</dt><dd>{{ w.organization.name }}</dd>
+      <dt>Сдал</dt><dd>{{ w.sender.full_name }}{% if w.sender.position %}<div class="muted small">{{ w.sender.position }}</div>{% endif %}</dd>
+      <dt>Принял</dt><dd>{{ w.receiver.full_name }}{% if w.receiver.position %}<div class="muted small">{{ w.receiver.position }}</div>{% endif %}</dd>
+      <dt>Основание</dt><dd>{{ w.basis or '—' }}</dd>
+      {% if w.notes %}<dt>Примечание</dt><dd>{{ w.notes }}</dd>{% endif %}
+      <dt>Составил</dt><dd>{{ w.created_by.display_name }}, {{ w.created_at|ru_date }}</dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2>Электронные подписи</h2>
+    {% if w.signatures %}
+    <ul class="sig-list">
+      {% for s in w.signatures %}
+        {% set ok = checks[s.id] %}
+        <li class="sig {{ 'sig-ok' if ok else ('sig-bad' if ok is sameas false else 'sig-unknown') }}">
+          <div><strong>{{ SIGNER_ROLE_LABELS[s.signer_role] }}</strong>: {{ s.user.employee.full_name if s.user.employee else s.user.username }}</div>
+          <div class="small muted">{{ s.signed_at|ru_date }} · {{ 'простая ЭП' if s.provider == 'simple' else 'усиленная ЭП (CAdES)' }}</div>
+          <div class="small">{{ s.certificate or '' }}</div>
+          <div class="small">{% if ok %}✔ Подпись действительна, документ не изменялся{% elif ok is sameas false %}✖ Подпись недействительна: документ изменён{% else %}Требуется проверка подписи во внешнем сервисе{% endif %}</div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Документ ещё не подписан.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card table-card">
+  <div class="card-head"><h2>Позиции ({{ w.lines|length }})</h2><strong>Итого: {{ w.total|money }}</strong></div>
+  <table class="table table-responsive">
+    <thead><tr><th>№</th><th>Наименование</th><th>Инв. №</th><th>Серийный №</th><th class="num">Стоимость</th></tr></thead>
+    <tbody>
+    {% for line in w.lines %}
+      <tr>
+        <td data-label="№">{{ loop.index }}</td>
+        <td data-label="Наименование"><a href="/items/{{ line.item_id }}">{{ line.name }}</a></td>
+        <td data-label="Инв. №">{{ line.inventory_number or '—' }}</td>
+        <td data-label="Серийный №">{{ line.serial_number or '—' }}</td>
+        <td data-label="Стоимость" class="num">{{ line.price|money }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if can_edit and w.status in (WaybillStatus.DRAFT, WaybillStatus.MANAGER_SIGNED) %}
+<div class="danger-zone">
+  {% if w.status == WaybillStatus.DRAFT and not w.signatures %}
+  <form method="post" action="/waybills/{{ w.id }}/delete" data-confirm="Удалить черновик?"><button class="btn btn-danger btn-sm" type="submit">Удалить черновик</button></form>
+  {% endif %}
+  <form method="post" action="/waybills/{{ w.id }}/cancel" data-confirm="Отменить накладную? Действие необратимо."><button class="btn btn-ghost btn-sm" type="submit">Отменить накладную</button></form>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if provider == 'cades' %}<script src="/static/signature.js"></script>{% endif %}{% endblock %}

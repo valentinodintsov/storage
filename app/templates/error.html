@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Ошибка {{ status_code }}{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="card login-card">
+    <h1>{{ 'Доступ запрещён' if status_code == 403 else ('Не найдено' if status_code == 404 else 'Ошибка') }}</h1>
+    <p>{{ message }}</p>
+    <a class="btn btn-primary" href="/">На главную</a>
+    <a class="btn btn-ghost" href="javascript:history.back()">Назад</a>
+  </div>
+</div>
+{% endblock %}

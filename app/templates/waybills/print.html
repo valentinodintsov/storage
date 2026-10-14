@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Накладная № {{ w.number }}</title>
+  <link rel="stylesheet" href="/static/print.css">
+</head>
+<body>
+<div class="toolbar no-print">
+  <button onclick="window.print()">Печать / сохранить в PDF</button>
+  <a href="/waybills/{{ w.id }}">Вернуться к документу</a>
+</div>
+<div class="sheet">
+  <div class="okud">Форма по ОКУД 0504102</div>
+  <h1>НАКЛАДНАЯ № {{ w.number }}<br>на внутреннее перемещение объектов нефинансовых активов</h1>
+  <p class="center">от {{ w.date|ru_date }}</p>
+
+  <table class="req">
+    <tr><td>Учреждение</td><td>{{ w.organization.name }}</td><td class="r">ИНН</td><td>{{ w.organization.inn or '' }}</td></tr>
+    <tr><td>Вид операции</td><td colspan="3">{{ WAYBILL_TYPE_LABELS[w.type] }}</td></tr>
+    <tr><td>Отправитель (сдал)</td><td colspan="3">{{ w.sender.full_name }}{{ ', ' ~ w.sender.position if w.sender.position }}</td></tr>
+    <tr><td>Получатель (принял)</td><td colspan="3">{{ w.receiver.full_name }}{{ ', ' ~ w.receiver.position if w.receiver.position }}</td></tr>
+    <tr><td>Основание</td><td colspan="3">{{ w.basis or '' }}</td></tr>
+  </table>
+
+  <table class="grid">
+    <thead>
+      <tr><th>№ п/п</th><th>Наименование объекта</th><th>Инвентарный номер</th><th>Заводской (серийный) номер</th><th>Кол-во</th><th>Стоимость, руб.</th></tr>
+    </thead>
+    <tbody>
+    {% for line in w.lines %}
+      <tr><td class="c">{{ loop.index }}</td><td>{{ line.name }}</td><td>{{ line.inventory_number or '' }}</td><td>{{ line.serial_number or '' }}</td><td class="c">1</td><td class="r">{{ (line.price|money).replace(' ₽', '') if line.price is not none else '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4" class="r"><b>Итого</b></td><td class="c"><b>{{ w.lines|length }}</b></td><td class="r"><b>{{ (w.total|money).replace(' ₽', '') }}</b></td></tr>
+    </tfoot>
+  </table>
+
+  <table class="signs">
+    {% for role, person, caption in [(SignerRole.HEAD, None, 'Руководитель (утвердил)'), (SignerRole.MANAGER, w.sender if w.type == WaybillType.ISSUE else None, 'Материально ответственное лицо'), (SignerRole.RECEIVER, w.receiver, 'Получатель (принял)')] %}
+      {% set s = w.signature_of(role) %}
+      <tr>
+        <td class="cap">{{ caption }}</td>
+        <td class="line">{{ (s.user.employee.position if s and s.user.employee) or (person.position if person) or '' }}<div class="u">должность</div></td>
+        <td class="line">{% if s %}<span class="stamp-mini">подписано ЭП</span>{% endif %}<div class="u">подпись</div></td>
+        <td class="line">{{ (s.user.employee.short_name if s and s.user.employee) or (person.short_name if person) or '' }}<div class="u">расшифровка подписи</div></td>
+      </tr>
+    {% endfor %}
+  </table>
+
+  {% if w.signatures %}
+  <div class="stamps">
+    {% for s in w.signatures %}
+    <div class="stamp">
+      <div class="stamp-title">ДОКУМЕНТ ПОДПИСАН ЭЛЕКТРОННОЙ ПОДПИСЬЮ</div>
+      <div><b>{{ SIGNER_ROLE_LABELS[s.signer_role] }}:</b> {{ s.user.employee.full_name if s.user.employee else s.user.username }}</div>
+      <div>{{ s.certificate or '' }}</div>
+      <div>Вид: {{ 'простая ЭП' if s.provider == 'simple' else 'усиленная ЭП (CAdES-BES)' }}</div>
+      <div>Дата: {{ s.signed_at|ru_date }}</div>
+      <div class="mono">SHA-256: {{ s.digest }}</div>
+      <div>{% if checks[s.id] %}Подпись действительна{% elif checks[s.id] is sameas false %}ВНИМАНИЕ: документ изменён после подписания{% else %}Проверка во внешнем сервисе{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <p class="foot">Статус документа: {{ WAYBILL_STATUS_LABELS[w.status] }}. Сформировано: {{ app_name }}.</p>
+</div>
+</body>
+</html>

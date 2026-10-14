@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "macros.html" import item_status, waybill_status %}
+{% block title %}Главная{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Здравствуйте, {{ user.employee.first_name if user.employee else user.username }}</h1>
+  {% if user.role in (Role.ADMIN, Role.MANAGER) %}
+  <div class="actions">
+    <a class="btn btn-primary" href="/waybills/new">+ Накладная</a>
+    <a class="btn" href="/items/new">+ Позиция</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if to_confirm %}
+<section class="card card-accent">
+  <h2>Ожидают подтверждения получения</h2>
+  <ul class="link-list">
+    {% for w in to_confirm %}
+      <li><a href="/waybills/{{ w.id }}">{{ w }}</a> — {{ w.lines|length }} поз. от {{ w.sender.short_name }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if to_sign %}
+<section class="card card-accent">
+  <h2>Ожидают вашей подписи</h2>
+  <table class="table">
+    <thead><tr><th>Документ</th><th>Тип</th><th>Получатель</th><th class="num">Позиций</th></tr></thead>
+    <tbody>
+    {% for w in to_sign %}
+      <tr class="row-link" data-href="/waybills/{{ w.id }}">
+        <td><a href="/waybills/{{ w.id }}">{{ w }}</a></td>
+        <td>{{ WAYBILL_TYPE_LABELS[w.type] }}</td>
+        <td>{{ w.receiver.short_name }}</td>
+        <td class="num">{{ w.lines|length }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if stats %}
+<section class="tiles">
+  {% for kind, by_status in stats.items() %}
+  <a class="tile" href="/items?kind={{ kind.value }}">
+    <div class="tile-label">{{ ITEM_KIND_LABELS[kind] }}</div>
+    <div class="tile-value">{{ by_status.values()|sum - by_status[ItemStatus.WRITTEN_OFF] }}</div>
+    <div class="tile-sub">на складе {{ by_status[ItemStatus.IN_STOCK] }} · выдано {{ by_status[ItemStatus.ISSUED] }}{% if by_status[ItemStatus.REPAIR] %} · в ремонте {{ by_status[ItemStatus.REPAIR] }}{% endif %}</div>
+  </a>
+  {% endfor %}
+  <div class="tile tile-plain">
+    <div class="tile-label">Балансовая стоимость</div>
+    <div class="tile-value tile-money">{{ total_amount|money }}</div>
+    <div class="tile-sub">без учёта списанного</div>
+  </div>
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><h2>Последние накладные</h2><a href="/waybills">Все →</a></div>
+    {% if recent %}
+    <table class="table">
+      <tbody>
+      {% for w in recent %}
+        <tr class="row-link" data-href="/waybills/{{ w.id }}">
+          <td><a href="/waybills/{{ w.id }}">№ {{ w.number }}</a><div class="muted small">{{ w.date|ru_date }} · {{ WAYBILL_TYPE_LABELS[w.type] }}</div></td>
+          <td>{{ w.receiver.short_name }}</td>
+          <td>{{ waybill_status(w.status) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">Накладных пока нет.</p>{% endif %}
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>Сроки лицензий</h2><a href="/items?kind=license">Все →</a></div>
+    {% if expiring %}
+    <table class="table">
+      <tbody>
+      {% for i in expiring %}
+        <tr class="row-link" data-href="/items/{{ i.id }}">
+          <td><a href="/items/{{ i.id }}">{{ i.name }}</a></td>
+          <td class="{{ 'text-danger' if i.valid_until < today }}">до {{ i.valid_until|ru_date }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">Нет лицензий с ограниченным сроком.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
+
+{% if my_items is defined %}
+<section class="card">
+  <div class="card-head"><h2>Закреплено за мной</h2><span class="muted">{{ my_items|length }} поз.</span></div>
+  {% if my_items %}
+  <table class="table">
+    <thead><tr><th>Наименование</th><th>Инв. №</th><th>Вид</th><th>Местонахождение</th></tr></thead>
+    <tbody>
+    {% for i in my_items %}
+      <tr class="row-link" data-href="/items/{{ i.id }}">
+        <td><a href="/items/{{ i.id }}">{{ i.name }}</a></td>
+        <td>{{ i.inventory_number or '—' }}</td>
+        <td>{{ ITEM_KIND_LABELS[i.kind] }}</td>
+        <td>{{ i.location or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">За вами не закреплено имущество.</p>{% endif %}
+</section>
+{% elif user.role == Role.USER %}
+<div class="alert alert-info">Ваша учётная запись не связана с карточкой сотрудника. Обратитесь к администратору.</div>
+{% endif %}
+{% endblock %}

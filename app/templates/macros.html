@@ -1,0 +1,37 @@
+{% macro item_status(status) -%}
+  <span class="badge badge-{{ status.value }}">{{ ITEM_STATUS_LABELS[status] }}</span>
+{%- endmacro %}
+
+{% macro waybill_status(status) -%}
+  <span class="badge badge-wb-{{ status.value }}">{{ WAYBILL_STATUS_LABELS[status] }}</span>
+{%- endmacro %}
+
+{% macro field(f, values, errors, options) -%}
+  {% set value = values.get(f.name) %}
+  {% set err = errors.get(f.name) %}
+  <div class="field {{ 'field-wide' if f.wide or f.type == 'textarea' }} {{ 'has-error' if err }}"
+       {% if f.kinds %}data-kinds="{{ f.kinds|map(attribute='value')|join(' ') }}"{% endif %}>
+    {% if f.type == 'checkbox' %}
+      <label class="check"><input type="checkbox" name="{{ f.name }}" {{ 'checked' if value }}> {{ f.label }}</label>
+    {% else %}
+      <label for="f-{{ f.name }}">{{ f.label }}{% if f.required %} <span class="req">*</span>{% endif %}</label>
+      {% if f.type == 'select' %}
+        <select id="f-{{ f.name }}" name="{{ f.name }}" {{ 'required' if f.required }}>
+          {% if not f.required %}<option value="">— не выбрано —</option>{% endif %}
+          {% for opt_value, opt_label in options[f.name] %}
+            <option value="{{ opt_value }}" {{ 'selected' if value is not none and opt_value|string == value|string }}>{{ opt_label }}</option>
+          {% endfor %}
+        </select>
+      {% elif f.type == 'textarea' %}
+        <textarea id="f-{{ f.name }}" name="{{ f.name }}" rows="3" {{ 'required' if f.required }}>{{ value if value is not none }}</textarea>
+      {% else %}
+        <input id="f-{{ f.name }}" name="{{ f.name }}"
+               type="{{ 'text' if f.type == 'number' else f.type }}"
+               {% if f.type == 'number' %}inputmode="decimal"{% endif %}
+               {% if f.type == 'password' %}autocomplete="new-password"{% endif %}
+               value="{{ value if value is not none and f.type != 'password' }}" {{ 'required' if f.required }}>
+      {% endif %}
+    {% endif %}
+    {% if err %}<div class="error-text">{{ err }}</div>{% elif f.hint %}<div class="hint">{{ f.hint }}</div>{% endif %}
+  </div>
+{%- endmacro %}

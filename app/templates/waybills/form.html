@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a class="back" href="{{ '/waybills/' ~ waybill.id if waybill else '/waybills' }}">← Назад</a>
+    <h1>{{ title }}</h1>
+  </div>
+</div>
+{% if errors.get('__all__') %}<div class="alert alert-error">{{ errors['__all__'] }}</div>{% endif %}
+
+<form method="post" action="{{ action }}" class="card form" id="waybill-form">
+  <input type="hidden" name="reload" value="">
+  <div class="form-grid">
+    <div class="field">
+      <label for="f-type">Вид операции <span class="req">*</span></label>
+      <select id="f-type" name="type" data-reload>
+        {% for t, label in WAYBILL_TYPE_LABELS.items() %}<option value="{{ t.value }}" {{ 'selected' if values.type == t }}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field {{ 'has-error' if errors.date }}">
+      <label for="f-date">Дата <span class="req">*</span></label>
+      <input id="f-date" type="date" name="date" value="{{ values.date }}" required>
+      {% if errors.date %}<div class="error-text">{{ errors.date }}</div>{% endif %}
+    </div>
+    <div class="field field-wide">
+      <label for="f-org">Организация <span class="req">*</span></label>
+      <select id="f-org" name="organization_id" data-reload>
+        {% for id, label in organizations %}<option value="{{ id }}" {{ 'selected' if values.organization_id == id }}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field {{ 'has-error' if errors.sender_id }}">
+      <label for="f-sender">Сдал {{ '(МОЛ)' if values.type == WaybillType.ISSUE else '(сотрудник)' }} <span class="req">*</span></label>
+      <select id="f-sender" name="sender_id" data-reload>
+        <option value="">— выберите —</option>
+        {% for e in employees %}<option value="{{ e.id }}" {{ 'selected' if values.sender_id == e.id }}>{{ e.full_name }}{{ ', ' ~ e.position if e.position }}</option>{% endfor %}
+      </select>
+      {% if errors.sender_id %}<div class="error-text">{{ errors.sender_id }}</div>{% endif %}
+    </div>
+    <div class="field {{ 'has-error' if errors.receiver_id }}">
+      <label for="f-receiver">Принял {{ '(МОЛ)' if values.type == WaybillType.RETURN else '(сотрудник)' }} <span class="req">*</span></label>
+      <select id="f-receiver" name="receiver_id">
+        <option value="">— выберите —</option>
+        {% for e in employees %}<option value="{{ e.id }}" {{ 'selected' if values.receiver_id == e.id }}>{{ e.full_name }}{{ ', ' ~ e.position if e.position }}</option>{% endfor %}
+      </select>
+      {% if errors.receiver_id %}<div class="error-text">{{ errors.receiver_id }}</div>{% endif %}
+    </div>
+    <div class="field field-wide">
+      <label for="f-basis">Основание</label>
+      <input id="f-basis" name="basis" value="{{ values.basis }}" placeholder="Например: служебная записка № 15 от 01.10.2026">
+    </div>
+  </div>
+
+  <h2 class="section-title">Позиции
+    <span class="muted small" id="selected-count"></span>
+  </h2>
+  {% if errors.item_ids %}<div class="error-text">{{ errors.item_ids }}</div>{% endif %}
+  {% if candidates %}
+    <input type="search" class="item-search" placeholder="Быстрый поиск по наименованию или номеру…" data-filter-table="#candidates">
+    <div class="table-scroll">
+    <table class="table" id="candidates">
+      <thead><tr><th class="check-col"><input type="checkbox" data-check-all aria-label="Выбрать все"></th><th>Наименование</th><th>Инв. №</th><th>Серийный №</th><th>Вид</th><th class="num">Стоимость</th></tr></thead>
+      <tbody>
+      {% for i in candidates %}
+        <tr>
+          <td class="check-col"><input type="checkbox" name="item_ids" value="{{ i.id }}" {{ 'checked' if i.id in values.item_ids }} aria-label="Выбрать"></td>
+          <td>{{ i.name }}</td>
+          <td>{{ i.inventory_number or '—' }}</td>
+          <td>{{ i.serial_number or '—' }}</td>
+          <td>{{ ITEM_KIND_LABELS[i.kind] }}</td>
+          <td class="num">{{ i.price|money }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      {% if values.type != WaybillType.ISSUE and not values.sender_id %}Выберите сотрудника, который сдаёт имущество.
+      {% elif values.type == WaybillType.ISSUE %}На складе нет свободных позиций этой организации.
+      {% else %}За выбранным сотрудником не закреплено имущество (или оно уже включено в другие накладные).{% endif %}
+    </div>
+  {% endif %}
+
+  <div class="field field-wide">
+    <label for="f-notes">Примечание</label>
+    <textarea id="f-notes" name="notes" rows="2">{{ values.notes }}</textarea>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Сохранить черновик</button>
+    <a class="btn btn-ghost" href="{{ '/waybills/' ~ waybill.id if waybill else '/waybills' }}">Отмена</a>
+  </div>
+</form>
+{% endblock %}

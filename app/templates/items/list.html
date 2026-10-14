@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "macros.html" import item_status %}
+{% block title %}Имущество{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ 'Моё имущество' if user.role == Role.USER else 'Имущество' }}</h1>
+  {% if can_edit %}<div class="actions"><a class="btn btn-primary" href="/items/new{{ '?kind=' ~ filters.kind.value if filters.kind }}">+ Поставить на учёт</a></div>{% endif %}
+</div>
+
+<nav class="tabs">
+  <a href="/items" class="{{ 'active' if not filters.kind }}">Все</a>
+  {% for k, label in ITEM_KIND_LABELS.items() %}
+    <a href="/items?kind={{ k.value }}" class="{{ 'active' if filters.kind == k }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<form class="filters" method="get">
+  {% if filters.kind %}<input type="hidden" name="kind" value="{{ filters.kind.value }}">{% endif %}
+  {% if filters.contract_id %}<input type="hidden" name="contract_id" value="{{ filters.contract_id }}">{% endif %}
+  <input type="search" name="q" value="{{ filters.q or '' }}" placeholder="Наименование, инв. или серийный номер…" aria-label="Поиск">
+  <select name="status" aria-label="Статус">
+    <option value="">Любой статус</option>
+    {% for s, label in ITEM_STATUS_LABELS.items() %}
+      <option value="{{ s.value }}" {{ 'selected' if filters.status == s }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% if employees %}
+  <select name="holder_id" aria-label="Сотрудник">
+    <option value="">Любой сотрудник</option>
+    {% for id, label in employees %}<option value="{{ id }}" {{ 'selected' if filters.holder_id == id }}>{{ label }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <button class="btn" type="submit">Применить</button>
+  {% if filters.q or filters.status or filters.holder_id or filters.contract_id %}<a class="btn btn-ghost" href="/items{{ '?kind=' ~ filters.kind.value if filters.kind }}">Сбросить</a>{% endif %}
+</form>
+{% if filters.contract_id %}<p class="muted">Показаны позиции по госконтракту #{{ filters.contract_id }}.</p>{% endif %}
+
+<div class="card table-card">
+  {% if rows %}
+  <table class="table table-responsive">
+    <thead><tr><th>Наименование</th><th>Инв. №</th><th>Вид</th><th>Статус</th><th>Сотрудник</th><th class="num">Стоимость</th></tr></thead>
+    <tbody>
+    {% for i in rows %}
+      <tr class="row-link" data-href="/items/{{ i.id }}">
+        <td data-label="Наименование"><a href="/items/{{ i.id }}">{{ i.name }}</a>{% if i.serial_number %}<div class="muted small">s/n {{ i.serial_number }}</div>{% endif %}</td>
+        <td data-label="Инв. №">{{ i.inventory_number or '—' }}</td>
+        <td data-label="Вид">{{ ITEM_KIND_LABELS[i.kind] }}</td>
+        <td data-label="Статус">{{ item_status(i.status) }}</td>
+        <td data-label="Сотрудник">{{ i.holder.short_name if i.holder else '—' }}</td>
+        <td data-label="Стоимость" class="num">{{ i.price|money }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="table-foot muted">Найдено: {{ rows|length }}</div>
+  {% else %}
+  <div class="empty">Ничего не найдено.</div>
+  {% endif %}
+</div>
+{% endblock %}

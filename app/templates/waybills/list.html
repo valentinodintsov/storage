@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "macros.html" import waybill_status %}
+{% block title %}Накладные{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Накладные</h1>
+  {% if can_edit %}
+  <div class="actions">
+    <a class="btn btn-primary" href="/waybills/new?type=issue">+ Выдача</a>
+    <a class="btn" href="/waybills/new?type=return">+ Возврат</a>
+    <a class="btn" href="/waybills/new?type=transfer">+ Передача</a>
+  </div>
+  {% endif %}
+</div>
+<form class="filters" method="get">
+  <select name="status" aria-label="Статус">
+    <option value="">Любой статус</option>
+    {% for s, label in WAYBILL_STATUS_LABELS.items() %}<option value="{{ s.value }}" {{ 'selected' if filters.status == s }}>{{ label }}</option>{% endfor %}
+  </select>
+  <select name="type" aria-label="Тип">
+    <option value="">Любой тип</option>
+    {% for t, label in WAYBILL_TYPE_LABELS.items() %}<option value="{{ t.value }}" {{ 'selected' if filters.type_ == t }}>{{ label }}</option>{% endfor %}
+  </select>
+  <button class="btn" type="submit">Применить</button>
+</form>
+<div class="card table-card">
+  {% if rows %}
+  <table class="table table-responsive">
+    <thead><tr><th>Номер</th><th>Дата</th><th>Тип</th><th>Сдал</th><th>Принял</th><th class="num">Позиций</th><th class="num">Сумма</th><th>Статус</th></tr></thead>
+    <tbody>
+    {% for w in rows %}
+      <tr class="row-link" data-href="/waybills/{{ w.id }}">
+        <td data-label="Номер"><a href="/waybills/{{ w.id }}">№ {{ w.number }}</a></td>
+        <td data-label="Дата">{{ w.date|ru_date }}</td>
+        <td data-label="Тип">{{ WAYBILL_TYPE_LABELS[w.type] }}</td>
+        <td data-label="Сдал">{{ w.sender.short_name }}</td>
+        <td data-label="Принял">{{ w.receiver.short_name }}</td>
+        <td data-label="Позиций" class="num">{{ w.lines|length }}</td>
+        <td data-label="Сумма" class="num">{{ w.total|money }}</td>
+        <td data-label="Статус">{{ waybill_status(w.status) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Накладных не найдено.</div>
+  {% endif %}
+</div>
+{% endblock %}
