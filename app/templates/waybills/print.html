@@ -60,7 +60,7 @@
       <div>Вид: {{ 'простая ЭП' if s.provider == 'simple' else 'усиленная ЭП (CAdES-BES)' }}</div>
       <div>Дата: {{ s.signed_at|ru_date }}</div>
       <div class="mono">SHA-256: {{ s.digest }}</div>
-      <div>{% if checks[s.id] %}Подпись действительна{% elif checks[s.id] is sameas false %}ВНИМАНИЕ: документ изменён после подписания{% else %}Проверка во внешнем сервисе{% endif %}</div>
+      <div>{% if checks[s.id] %}Подпись действительна{% elif checks[s.id] is sameas false %}ВНИМАНИЕ: подпись недействительна{% else %}Подпись не проверена{% endif %}</div>
     </div>
     {% endfor %}
   </div>

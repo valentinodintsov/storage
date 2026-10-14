@@ -67,8 +67,8 @@ def test_full_waybill_flow(client, tokens):
     })
     assert r.status_code == 400
 
-    # руководитель не может подписать раньше МОЛ, подпись без пароля не принимается
-    assert client.post(f"/api/v1/waybills/{wb['id']}/sign", json={"password": PASSWORD}, headers=h).status_code == 403
+    # руководитель не видит и не может подписать накладную раньше МОЛ, подпись без пароля не принимается
+    assert client.post(f"/api/v1/waybills/{wb['id']}/sign", json={"password": PASSWORD}, headers=h).status_code == 404
     assert client.post(f"/api/v1/waybills/{wb['id']}/sign", json={}, headers=m).status_code == 400
 
     r = client.post(f"/api/v1/waybills/{wb['id']}/sign", json={"password": PASSWORD}, headers=m)

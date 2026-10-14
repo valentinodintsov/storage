@@ -8,6 +8,7 @@ os.environ["STORAGE_DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
 os.environ["STORAGE_SECRET_KEY"] = secrets.token_urlsafe(48)
 os.environ["STORAGE_ADMIN_PASSWORD"] = "admin-test-pass"
 os.environ["STORAGE_DEMO_PASSWORD"] = "demo12345"
+os.environ["STORAGE_SIGNATURE_PROVIDER"] = "simple"  # не зависеть от локального .env
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

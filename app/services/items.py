@@ -1,4 +1,4 @@
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, true
 from sqlalchemy.orm import Session
 
 from app.errors import Forbidden, NotFound, ServiceError
@@ -10,6 +10,8 @@ from app.models import (
     ItemKind,
     ItemStatus,
     Role,
+    Signature,
+    SignerRole,
     User,
     Waybill,
     WaybillLine,
@@ -99,6 +101,13 @@ def update_item(db: Session, user: User, item: Item, payload: ItemIn) -> Item:
     return crud.update_entity(db, user, item, payload)
 
 
+def visible_waybills(user: User):
+    """Условие видимости накладных: руководитель видит накладную только после подписи МОЛ."""
+    if user.role != Role.HEAD:
+        return true()
+    return Waybill.signatures.any(Signature.signer_role == SignerRole.MANAGER)
+
+
 def active_waybill_for(db: Session, item_id: int, exclude_waybill_id: int | None = None) -> Waybill | None:
     stmt = (
         select(Waybill)
@@ -134,10 +143,12 @@ def delete_item(db: Session, user: User, item: Item) -> None:
     crud.delete_entity(db, user, item)
 
 
-def item_history(db: Session, item: Item) -> dict:
+def item_history(db: Session, user: User, item: Item) -> dict:
     waybills = list(
         db.scalars(
-            select(Waybill).join(WaybillLine).where(WaybillLine.item_id == item.id).order_by(Waybill.date.desc())
+            select(Waybill).join(WaybillLine)
+            .where(WaybillLine.item_id == item.id, visible_waybills(user))
+            .order_by(Waybill.date.desc())
         )
     )
     events = list(

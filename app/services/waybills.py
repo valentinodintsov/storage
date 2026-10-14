@@ -4,6 +4,9 @@
     черновик → (подпись МОЛ) → подписана МОЛ → (подпись руководителя) → утверждена
     → (подтверждение получателем) → получение подтверждено.
 Движение имущества (смена статуса и ответственного) выполняется при утверждении руководителем.
+
+Подписант может отменить свою последнюю подпись, администратор — любую (вместе с ней отменяются
+все последующие). Отмена подписи руководителя возвращает имущество в исходное состояние.
 """
 
 from sqlalchemy import or_, select
@@ -17,7 +20,9 @@ from app.models import (
     Item,
     ItemStatus,
     Organization,
+    SIGNER_ROLE_LABELS,
     Role,
+    Signature,
     SignerRole,
     User,
     Waybill,
@@ -27,7 +32,7 @@ from app.models import (
 )
 from app.schemas import SignIn, WaybillIn
 from app.services import audit, signatures
-from app.services.items import active_waybill_for
+from app.services.items import active_waybill_for, visible_waybills
 
 
 def list_waybills(
@@ -40,7 +45,7 @@ def list_waybills(
     limit: int = 500,
     offset: int = 0,
 ) -> list[Waybill]:
-    stmt = select(Waybill)
+    stmt = select(Waybill).where(visible_waybills(user))
     if user.role == Role.USER:
         if not user.employee_id:
             return []
@@ -56,7 +61,7 @@ def list_waybills(
 
 def get_waybill(db: Session, user: User, waybill_id: int) -> Waybill:
     waybill = db.get(Waybill, waybill_id)
-    if waybill is None:
+    if waybill is None or (user.role == Role.HEAD and waybill.signature_of(SignerRole.MANAGER) is None):
         raise NotFound("Накладная не найдена")
     if user.role == Role.USER and user.employee_id not in (waybill.sender_id, waybill.receiver_id):
         raise Forbidden()
@@ -196,7 +201,7 @@ def sign_waybill(db: Session, user: User, waybill: Waybill, data: SignIn) -> Way
     if role == SignerRole.HEAD:
         manager_sig = waybill.signature_of(SignerRole.MANAGER)
         if manager_sig is None or signatures.verify_signature(waybill, manager_sig) is False:
-            raise ServiceError("Подпись МОЛ недействительна: документ был изменён после подписания")
+            raise ServiceError("Подпись МОЛ недействительна: документ изменён после подписания или сертификат не прошёл проверку")
 
     sig = signatures.make_signature(user, role, waybill, data)
     waybill.signatures.append(sig)
@@ -217,6 +222,77 @@ def sign_waybill(db: Session, user: User, waybill: Waybill, data: SignIn) -> Way
     return waybill
 
 
+# Статус накладной по последней действующей подписи
+_STATUS_AFTER = {
+    None: WaybillStatus.DRAFT,
+    SignerRole.MANAGER: WaybillStatus.MANAGER_SIGNED,
+    SignerRole.HEAD: WaybillStatus.APPROVED,
+    SignerRole.RECEIVER: WaybillStatus.RECEIVED,
+}
+
+
+def can_revoke(user: User, waybill: Waybill, sig: Signature) -> bool:
+    """Подписант отменяет только свою последнюю подпись, администратор — любую."""
+    if user.role == Role.ADMIN:
+        return True
+    return (waybill.status != WaybillStatus.CANCELLED and sig.user_id == user.id
+            and sig is waybill.signatures[-1])
+
+
+def _revert_movement(db: Session, waybill: Waybill) -> None:
+    approval = waybill.signature_of(SignerRole.HEAD)
+    for line in waybill.lines:
+        item = line.item
+        moved = (ItemStatus.IN_STOCK, None) if waybill.type == WaybillType.RETURN else (ItemStatus.ISSUED, waybill.receiver_id)
+        if (item.status, item.holder_id) != moved or _later_waybill(db, item.id, waybill, approval):
+            raise ServiceError(f"{item}: после утверждения накладной имущество уже перемещено или изменён его статус — "
+                               "отмена подписи руководителя невозможна")
+        if waybill.type == WaybillType.ISSUE:
+            item.status, item.holder_id = ItemStatus.IN_STOCK, None
+        else:
+            item.status, item.holder_id = ItemStatus.ISSUED, waybill.sender_id
+
+
+def _later_waybill(db: Session, item_id: int, waybill: Waybill, approval: Signature) -> Waybill | None:
+    """Другая накладная по позиции — действующая или утверждённая позже данной (подписи нумеруются по порядку)."""
+    stmt = (select(Waybill).join(WaybillLine)
+            .where(WaybillLine.item_id == item_id, Waybill.id != waybill.id, Waybill.status != WaybillStatus.CANCELLED))
+    for other in db.scalars(stmt):
+        head = other.signature_of(SignerRole.HEAD)
+        if other.status in ACTIVE_WAYBILL_STATUSES or (head and head.id > approval.id):
+            return other
+    return None
+
+
+def _revoke(db: Session, user: User, waybill: Waybill, sig: Signature, reason: str) -> None:
+    revoked = [s for s in waybill.signatures if s.id >= sig.id]
+    if waybill.status != WaybillStatus.CANCELLED and any(s.signer_role == SignerRole.HEAD for s in revoked):
+        _revert_movement(db, waybill)
+        for line in waybill.lines:
+            audit.log(db, user, "move", "items", line.item_id, f"отмена утверждения накладной № {waybill.number}")
+    for s in reversed(revoked):
+        signer = s.user.employee.full_name if s.user.employee else s.user.username
+        audit.log(db, user, "revoke", "waybills", waybill.id,
+                  f"№ {waybill.number}: отменена подпись «{SIGNER_ROLE_LABELS[s.signer_role]}» — {signer}, "
+                  f"{s.provider}, {s.signed_at:%d.%m.%Y %H:%M}; {s.certificate or ''}. Причина: {reason}")
+        waybill.signatures.remove(s)
+    if waybill.status != WaybillStatus.CANCELLED:
+        waybill.status = _STATUS_AFTER[waybill.signatures[-1].signer_role if waybill.signatures else None]
+
+
+def revoke_signature(db: Session, user: User, waybill: Waybill, signature_id: int, reason: str) -> Waybill:
+    sig = next((s for s in waybill.signatures if s.id == signature_id), None)
+    if sig is None:
+        raise NotFound("Подпись не найдена")
+    if not can_revoke(user, waybill, sig):
+        raise Forbidden("Отменить можно только свою последнюю подпись под документом")
+    if not reason.strip():
+        raise ServiceError("Укажите причину отмены подписи")
+    _revoke(db, user, waybill, sig, reason.strip())
+    db.commit()
+    return waybill
+
+
 def cancel_waybill(db: Session, user: User, waybill: Waybill, reason: str = "") -> Waybill:
     if user.role not in (Role.ADMIN, Role.MANAGER):
         raise Forbidden()
@@ -228,9 +304,16 @@ def cancel_waybill(db: Session, user: User, waybill: Waybill, reason: str = "") 
     return waybill
 
 
-def delete_waybill(db: Session, user: User, waybill: Waybill) -> None:
-    if waybill.status != WaybillStatus.DRAFT or waybill.signatures:
-        raise ServiceError("Удалить можно только неподписанный черновик")
-    audit.log(db, user, "delete", "waybills", waybill.id, f"№ {waybill.number}")
+def delete_waybill(db: Session, user: User, waybill: Waybill, reason: str = "") -> None:
+    """Черновик без подписей удаляют администратор и менеджер; любую накладную — администратор."""
+    reason = reason.strip()
+    if user.role == Role.ADMIN and (waybill.status != WaybillStatus.DRAFT or waybill.signatures):
+        if not reason:
+            raise ServiceError("Укажите причину удаления накладной")
+        if waybill.signatures:
+            _revoke(db, user, waybill, waybill.signatures[0], reason)
+    elif waybill.status != WaybillStatus.DRAFT or waybill.signatures:
+        raise ServiceError("Удалить можно только черновик без подписей — сначала отмените подписи")
+    audit.log(db, user, "delete", "waybills", waybill.id, f"№ {waybill.number}. {reason}".strip())
     db.delete(waybill)
     db.commit()

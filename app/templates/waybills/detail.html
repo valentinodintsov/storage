@@ -66,7 +66,15 @@
           <div><strong>{{ SIGNER_ROLE_LABELS[s.signer_role] }}</strong>: {{ s.user.employee.full_name if s.user.employee else s.user.username }}</div>
           <div class="small muted">{{ s.signed_at|ru_date }} · {{ 'простая ЭП' if s.provider == 'simple' else 'усиленная ЭП (CAdES)' }}</div>
           <div class="small">{{ s.certificate or '' }}</div>
-          <div class="small">{% if ok %}✔ Подпись действительна, документ не изменялся{% elif ok is sameas false %}✖ Подпись недействительна: документ изменён{% else %}Требуется проверка подписи во внешнем сервисе{% endif %}</div>
+          <div class="small">{% if ok %}✔ Подпись действительна, документ не изменялся{% elif ok is sameas false %}✖ Подпись недействительна: документ изменён или сертификат не прошёл проверку{% else %}Подпись не удалось проверить (КриптоПро CSP на сервере или списки отзыва недоступны){% endif %}</div>
+          {% if s.id in revocable %}
+          {% set later = w.signatures|selectattr('id', 'gt', s.id)|list %}
+          <form method="post" action="/waybills/{{ w.id }}/signatures/{{ s.id }}/revoke" class="inline-form revoke-form"
+                data-confirm="Отменить подпись?{% if later %} Будут отменены и все последующие подписи ({{ later|length }}).{% endif %}{% if s.signer_role == SignerRole.HEAD or later|selectattr('signer_role', 'equalto', SignerRole.HEAD)|list %} Имущество вернётся в состояние до утверждения.{% endif %}">
+            <input type="text" name="reason" placeholder="Причина отмены" maxlength="500" required aria-label="Причина отмены подписи">
+            <button class="btn btn-ghost btn-sm" type="submit">Отменить подпись</button>
+          </form>
+          {% endif %}
         </li>
       {% endfor %}
     </ul>
@@ -92,12 +100,22 @@
   </table>
 </section>
 
-{% if can_edit and w.status in (WaybillStatus.DRAFT, WaybillStatus.MANAGER_SIGNED) %}
+{% set is_admin = user.role == Role.ADMIN %}
+{% set clean_draft = w.status == WaybillStatus.DRAFT and not w.signatures %}
+{% if (can_edit and w.status in (WaybillStatus.DRAFT, WaybillStatus.MANAGER_SIGNED)) or is_admin %}
 <div class="danger-zone">
-  {% if w.status == WaybillStatus.DRAFT and not w.signatures %}
+  {% if can_edit and clean_draft %}
   <form method="post" action="/waybills/{{ w.id }}/delete" data-confirm="Удалить черновик?"><button class="btn btn-danger btn-sm" type="submit">Удалить черновик</button></form>
+  {% elif is_admin %}
+  <form method="post" action="/waybills/{{ w.id }}/delete" class="inline-form"
+        data-confirm="Удалить накладную № {{ w.number }}?{% if w.signatures %} Все подписи будут отменены{% if w.status in (WaybillStatus.APPROVED, WaybillStatus.RECEIVED) %}, имущество вернётся в состояние до утверждения{% endif %}.{% endif %} Действие необратимо.">
+    <input type="text" name="reason" placeholder="Причина удаления" maxlength="500" required aria-label="Причина удаления накладной">
+    <button class="btn btn-danger btn-sm" type="submit">Удалить накладную</button>
+  </form>
   {% endif %}
+  {% if can_edit and w.status in (WaybillStatus.DRAFT, WaybillStatus.MANAGER_SIGNED) %}
   <form method="post" action="/waybills/{{ w.id }}/cancel" data-confirm="Отменить накладную? Действие необратимо."><button class="btn btn-ghost btn-sm" type="submit">Отменить накладную</button></form>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

@@ -243,7 +243,7 @@ async def item_create(request: Request, db: Session = Depends(get_db), user: m.U
 def item_detail(item_id: int, request: Request, db: Session = Depends(get_db),
                 user: m.User = Depends(get_current_user)):
     item = items_svc.get_item(db, user, item_id)
-    history = items_svc.item_history(db, item) if user.role in CAN_VIEW_ALL else {"waybills": [], "events": []}
+    history = items_svc.item_history(db, user, item) if user.role in CAN_VIEW_ALL else {"waybills": [], "events": []}
     return render(request, "items/detail.html", user, item=item, history=history,
                   can_edit=user.role in CAN_EDIT_ASSETS,
                   transitions=sorted(items_svc.STATUS_TRANSITIONS[item.status], key=lambda s: s.value))
@@ -399,7 +399,8 @@ def waybill_detail(waybill_id: int, request: Request, db: Session = Depends(get_
     checks = {s.id: signatures.verify_signature(waybill, s) for s in waybill.signatures}
     return render(request, "waybills/detail.html", user, w=waybill, signer_role=signer_role, checks=checks,
                   provider=signatures.provider_for(signer_role).name if signer_role else None,
-                  can_edit=user.role in CAN_EDIT_ASSETS)
+                  can_edit=user.role in CAN_EDIT_ASSETS,
+                  revocable={s.id for s in waybill.signatures if waybills_svc.can_revoke(user, waybill, s)})
 
 
 @router.get("/waybills/{waybill_id}/edit")
@@ -448,13 +449,30 @@ def waybill_cancel(waybill_id: int, db: Session = Depends(get_db), user: m.User 
     return redirect(f"/waybills/{waybill_id}", "Накладная отменена")
 
 
-@router.post("/waybills/{waybill_id}/delete")
-def waybill_delete(waybill_id: int, db: Session = Depends(get_db), user: m.User = Depends(editors)):
+@router.post("/waybills/{waybill_id}/signatures/{signature_id}/revoke")
+async def waybill_revoke(waybill_id: int, signature_id: int, request: Request, db: Session = Depends(get_db),
+                         user: m.User = Depends(get_current_user)):
+    form = await request.form()
     try:
-        waybills_svc.delete_waybill(db, user, waybills_svc.get_waybill(db, user, waybill_id))
+        waybills_svc.revoke_signature(db, user, waybills_svc.get_waybill(db, user, waybill_id), signature_id,
+                                      str(form.get("reason") or ""))
     except ServiceError as exc:
+        db.rollback()
         return redirect(f"/waybills/{waybill_id}", exc.message, "error")
-    return redirect("/waybills", "Черновик удалён")
+    return redirect(f"/waybills/{waybill_id}", "Подпись отменена")
+
+
+@router.post("/waybills/{waybill_id}/delete")
+async def waybill_delete(waybill_id: int, request: Request, db: Session = Depends(get_db),
+                         user: m.User = Depends(editors)):
+    form = await request.form()
+    try:
+        waybills_svc.delete_waybill(db, user, waybills_svc.get_waybill(db, user, waybill_id),
+                                    str(form.get("reason") or ""))
+    except ServiceError as exc:
+        db.rollback()
+        return redirect(f"/waybills/{waybill_id}", exc.message, "error")
+    return redirect("/waybills", "Накладная удалена")
 
 
 @router.get("/waybills/{waybill_id}/print")

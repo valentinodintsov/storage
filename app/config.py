@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     #   cades  — усиленная ЭП (CAdES-BES), подпись формируется в браузере через КриптоПро ЭЦП Browser plug-in.
     signature_provider: str = "simple"
 
+    # Проверка усиленной ЭП на сервере средствами КриптоПро CSP (утилита cryptcp). Корневые сертификаты
+    # УЦ должны быть установлены в доверенные у пользователя, от имени которого работает сервис.
+    cryptcp_path: str = "/opt/cprocsp/bin/amd64/cryptcp"
+    # Проверять отзыв сертификатов (CRL/OCSP); в закрытой сети без доступа к спискам отзыва — false
+    cades_check_revocation: bool = True
+    cades_verify_timeout: int = 30
+
     # Учётная запись администратора, создаётся при первом запуске
     admin_username: str = "admin"
 

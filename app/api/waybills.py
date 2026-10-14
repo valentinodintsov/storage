@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import User, WaybillStatus, WaybillType
-from app.schemas import SignDocument, SignIn, WaybillIn, WaybillOut
+from app.schemas import ReasonIn, SignDocument, SignIn, WaybillIn, WaybillOut
 from app.security import CAN_EDIT_ASSETS, get_current_user, require_roles
 from app.services import signatures
 from app.services import waybills as svc
@@ -38,10 +38,11 @@ def update_waybill(waybill_id: int, payload: WaybillIn, db: Session = Depends(ge
     return svc.update_waybill(db, user, svc.get_waybill(db, user, waybill_id), payload)
 
 
-@router.delete("/{waybill_id}", status_code=204)
-def delete_waybill(waybill_id: int, db: Session = Depends(get_db),
+@router.delete("/{waybill_id}", status_code=204,
+               summary="Удалить: черновик без подписей; администратор — любую накладную с указанием причины")
+def delete_waybill(waybill_id: int, reason: str = "", db: Session = Depends(get_db),
                    user: User = Depends(require_roles(*CAN_EDIT_ASSETS))):
-    svc.delete_waybill(db, user, svc.get_waybill(db, user, waybill_id))
+    svc.delete_waybill(db, user, svc.get_waybill(db, user, waybill_id), reason)
 
 
 @router.get("/{waybill_id}/sign-document", response_model=SignDocument,
@@ -60,6 +61,13 @@ def sign_document(waybill_id: int, db: Session = Depends(get_db), user: User = D
              summary="Подписать: МОЛ → руководитель → получатель (по статусу и роли)")
 def sign(waybill_id: int, payload: SignIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return svc.sign_waybill(db, user, svc.get_waybill(db, user, waybill_id), payload)
+
+
+@router.post("/{waybill_id}/signatures/{signature_id}/revoke", response_model=WaybillOut,
+             summary="Отменить подпись: свою последнюю; администратор — любую (вместе с последующими)")
+def revoke_signature(waybill_id: int, signature_id: int, payload: ReasonIn, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    return svc.revoke_signature(db, user, svc.get_waybill(db, user, waybill_id), signature_id, payload.reason)
 
 
 @router.post("/{waybill_id}/cancel", response_model=WaybillOut)

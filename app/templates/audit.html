@@ -2,7 +2,7 @@
 {% block title %}Журнал действий{% endblock %}
 {% block content %}
 {% set entities = {'items': 'Позиции', 'waybills': 'Накладные', 'users': 'Пользователи', 'contracts': 'Госконтракты', 'counterparties': 'Контрагенты', 'organizations': 'Организации', 'employees': 'Сотрудники', 'categories': 'Категории'} %}
-{% set actions = {'create': 'создание', 'update': 'изменение', 'delete': 'удаление', 'sign': 'подписание', 'cancel': 'отмена', 'status': 'смена статуса', 'move': 'перемещение'} %}
+{% set actions = {'create': 'создание', 'update': 'изменение', 'delete': 'удаление', 'sign': 'подписание', 'cancel': 'отмена', 'status': 'смена статуса', 'move': 'перемещение', 'revoke': 'отмена подписи'} %}
 <div class="page-head"><h1>Журнал действий</h1></div>
 <form class="filters" method="get">
   <select name="entity" aria-label="Объект">

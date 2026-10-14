@@ -210,6 +210,7 @@ class WaybillLineOut(ORM):
 
 
 class SignatureOut(ORM):
+    id: int
     signer_role: SignerRole
     user_id: int
     provider: str
@@ -232,6 +233,12 @@ class WaybillOut(ORM):
     notes: str | None
     lines: list[WaybillLineOut]
     signatures: list[SignatureOut]
+
+
+class ReasonIn(BaseModel):
+    """Причина отмены подписи или удаления подписанной накладной (попадает в журнал действий)."""
+
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class SignIn(BaseModel):
